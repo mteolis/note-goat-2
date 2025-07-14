@@ -38,13 +38,22 @@ func main() {
 	log.Printf("%s %s executing...\n", constants.AppName, constants.Version)
 
 	utils.InitUtils(logger)
-	excelPath := utils.SqweekInputExcel()
-	promptPath := utils.SqweekInputPrompt()
 	geminiApiKey := utils.GetGeminiApiKey()
+	// TODO - remove testing paths
+	// excelCommsPath := utils.SqweekExcelComms()
+	// excelPurchasesPath := utils.SqweekExcelPurchases()
+	// excelOutputPath := utils.SqweekOutputExcel()
+	// promptPath := utils.SqweekInputPrompt()
+	excelCommsPath := "empty"
+	excelPurchasesPath := "empty"
+	excelOutputPath := "empty"
+	promptPath := "empty"
 
-	goat.InitGoat(logger, excelPath, promptPath, geminiApiKey)
-	goat.AddAISummary()
+	goat.InitGoat(logger, excelCommsPath, excelPurchasesPath, excelOutputPath, promptPath, geminiApiKey)
+	goat.AggregateExcelDataComms()
+	// goat.AggregateExcelDataPurchases()
+	// goat.AddAISummary()
 
 	utils.CalcExecutionTime(start)
-	utils.WaitForQuit()
+	// utils.WaitForQuit()
 }

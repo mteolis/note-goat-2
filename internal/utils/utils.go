@@ -21,13 +21,32 @@ func InitUtils(slogger *slog.Logger) {
 	logger = slogger
 }
 
-func SqweekInputExcel() string {
-	log.Printf("Waiting for excel file input selection...\n")
+func SqweekExcelComms() string {
+	logger.Debug("Waiting for excel communications and FX file selection...\n")
+	log.Printf("Waiting for excel communications and FX file selection...\n")
 
+	return sqweekExcel("Select an Excel Communications and FX file to parse data from")
+}
+
+func SqweekExcelPurchases() string {
+	logger.Debug("Waiting for excel purchases file selection...\n")
+	log.Printf("Waiting for excel purchases file selection...\n")
+
+	return sqweekExcel("Select an Excel Purchases file to parse data from")
+}
+
+func SqweekOutputExcel() string {
+	logger.Debug("Waiting for excel template file output selection...\n")
+	log.Printf("Waiting for excel template file output selection...\n")
+
+	return sqweekExcel("Select an Excel Template file to save the output as")
+}
+
+func sqweekExcel(title string) string {
 	var excelExtensions = []string{"xlsx", "xls", "xlsm", "xlsb", "csv", "xltx", "xltm", "ods"}
 	filePath, err := dialog.File().
 		Filter("Excel Files", excelExtensions...).
-		Title(fmt.Sprintf("Select an Excel file to %s", constants.AppName)).
+		Title(title).
 		Load()
 	if err != nil {
 		logger.Error("Error selecting file: %+v\n", "err", err)
@@ -37,6 +56,7 @@ func SqweekInputExcel() string {
 }
 
 func SqweekInputPrompt() string {
+	logger.Debug("Waiting for prompt text file input selection...\n")
 	log.Printf("Waiting for prompt text file input selection...\n")
 
 	filePath, err := dialog.File().
@@ -54,6 +74,7 @@ func GetGeminiApiKey() string {
 	key := os.Getenv(constants.GeminiApiKeyVar)
 
 	if key == "" {
+		logger.Debug(fmt.Sprintf("Waiting for %s text file input selection...\n", constants.GeminiApiKeyVar))
 		log.Printf("Waiting for %s text file input selection...\n", constants.GeminiApiKeyVar)
 
 		filePath, err := dialog.File().
@@ -88,6 +109,18 @@ func CalcExecutionTime(start time.Time) {
 	logger.Info("%s %s executed successfully in %dh:%dm:%ds\n",
 		"App Name", constants.AppName, "Version", constants.Version, "hours", hours, "minutes", minutes, "seconds", seconds)
 	log.Printf("%s %s executed successfully in %dh:%dm:%ds\n", constants.AppName, constants.Version, hours, minutes, seconds)
+}
+
+func MakeOutputDir() {
+	if err := os.MkdirAll("output", os.ModePerm); err != nil {
+		logger.Error("Error creating output directory: %+v\n", "err", err)
+		log.Printf("Error creating output directory: %+v\n", err)
+		return
+	}
+}
+
+func ColumnToIndex(column string) int {
+	return constants.ColumnMappings[column]
 }
 
 func WaitForQuit() {
