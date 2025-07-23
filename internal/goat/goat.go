@@ -5,8 +5,11 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"strconv"
+	"strings"
+	"unicode"
 
-	// "github.com/mteolis/note-goat-2/internal/constants"
+	"github.com/mteolis/note-goat-2/internal/constants"
 	"github.com/mteolis/note-goat-2/internal/gemini"
 	"github.com/mteolis/note-goat-2/internal/utils"
 	"github.com/xuri/excelize/v2"
@@ -71,80 +74,67 @@ func AggregateExcelDataComms() {
 
 	// assume sorted by client (col B)
 	for i, row := range rows {
-		// remove row number printing
-		// fmt.Printf("row %d: %+v\n", i+1, row)
-		fmt.Printf("row %d\n", i+1)
 		if i == 0 {
-			fmt.Printf("skipping header row\n")
 			continue // skip header row
 		}
 		clientId := row[1]
-		// TODO potentially change logic to check forward client id change
 		if i == 1 || (i > 0 && clientId != rows[i-1][1]) {
 			if i > 1 && clientId != rows[i-1][1] {
 				utils.MakeOutputDir()
 
-				fmt.Printf("created output dir\n")
-
 				savePreviousClientExcelFile(outputFile, rows, i)
 
-				fmt.Printf("opening file for %s\n", clientId)
 				outputFile, err = excelize.OpenFile(excelOutputFile)
 			}
 		}
 
-		// TODO - implement logic to write data to file per row
+		commsTransfers := constants.CommsFxToTemplate
+		for _, transfer := range commsTransfers.Transfers {
+			for _, srcCol := range transfer.SrcCol {
+				getCell := fmt.Sprintf("%s%d", srcCol, i+1) // +1 to skip header row
+				fileCellValue, _ := file.GetCellValue(sheets[0], getCell)
+				if srcCol == "AA" && fileCellValue == "" {
+					fileCellValue, _ = file.GetCellValue(sheets[0], fmt.Sprintf("%s%d", "AB", i+1))
+					if fileCellValue == "" {
+						fileCellValue = "N/A"
+					}
+				}
+				if fileCellValue == "" {
+					continue // skip empty cells
+				}
 
-		// test writing to same output file
-		oldSheetName := sheets[0]
-		clientName := row[5]
-		outputFile.SetSheetName(oldSheetName, clientName)
-
-		// commsTransfers := constants.CommsFxToTemplate
-		// for j, transfer := range commsTransfers.Transfers {
-		// 	fmt.Printf("transfer %d: %s -> %s\n", j, transfer.SrcCol, transfer.DstFromCell)
-		// 	for _, srcCol := range transfer.SrcCol {
-		// 		// TODO - check if is range dst from dst to, if dst to (last cell) full, append to overflow cell
-		// 		sc := fmt.Sprintf("%s%d", srcCol, i+1) // +1 to skip header row
-		// 		fmt.Printf("sc: %s\n", sc)
-		// 		getCell := fmt.Sprintf("%s%d", srcCol, i+1) // +1 to skip header row
-		// 		getCellValue, _ := file.GetCellValue(sheets[0], getCell)
-		// 		if getCellValue == "" {
-		// 			fmt.Printf("skipping getCellValue is empty for %s\n", getCell)
-		// 			continue // skip empty cells
-		// 		}
-		// 		fmt.Printf("getCell(%s): %s\n", getCell, getCellValue)
-
-		// 		// if dstToCell empty, write to dstFromCell
-		// 		if transfer.DstToCell == "" {
-		// 			fmt.Printf("writing to %s on sheet %s target cell %s with value %s\n", outputFile.Path, clientName, transfer.DstFromCell, getCellValue)
-		// 			outputFile.SetCellValue(clientName, transfer.DstFromCell, getCellValue)
-		// 		} else {
-		// 			// loop dstFrom to dstTo and add on to empty, if full, append to overflow cell
-		// 		}
-		// 		// fmt.Printf("utils.ColumnToIndex(%s): %d\n", srcCol, utils.ColumnToIndex(srcCol))
-		// 		// scv := row[utils.ColumnToIndex(srcCol)]
-		// 		// fmt.Printf("scv: %s\n", scv)
-		// 	}
-		// 	// valueCol := fmt.Sprintf("%s%d", transfer.SrcCol[0], i)
-		// 	// fmt.Printf("valueCol: %s\n", valueCol)
-		// 	// outputFile.SetCellValue(clientName, transfer.DstFromCell)
-		// }
-
-		// saveCurrentClientExcelFile(outputFile, rows, i)
-		// outputFile.Close()
-		// os.Exit(0) // TODO - remove test exit
-		// fmt.Printf("Exiting script - End of testing\n")
-
-		// currentValue, _ := outputFile.GetCellValue(sheet, "A1")
-		// newValue := currentValue + "," + strconv.Itoa(i+1)
-		// outputFile.SetCellValue(sheet, "A1", newValue)
-		// ^^ test writing to same output file
+				if transfer.DstToCell == "" {
+					outputFile.SetCellValue(outputFile.GetSheetName(0), transfer.DstFromCell, fileCellValue)
+				} else {
+					dstFromLetter, dstFromNumber := parseCell(transfer.DstFromCell)
+					_, dstToNumber := parseCell(transfer.DstToCell)
+					for row := dstFromNumber; row <= dstToNumber; row++ {
+						outputCellValue, _ := outputFile.GetCellValue(outputFile.GetSheetName(0), fmt.Sprintf("%s%d", dstFromLetter, row))
+						if srcCol == "G" && outputCellValue != "" {
+							if len(strings.Split(outputCellValue, " ")) >= 2 {
+								continue
+							}
+							outputCellValue += fmt.Sprintf(" %s", fileCellValue)
+							outputFile.SetCellValue(outputFile.GetSheetName(0), fmt.Sprintf("%s%d", dstFromLetter, row), outputCellValue)
+							break
+						}
+						if outputCellValue == "" {
+							outputFile.SetCellValue(outputFile.GetSheetName(0), fmt.Sprintf("%s%d", dstFromLetter, row), fileCellValue)
+							break
+						} else if row == dstToNumber {
+							overflowCellData, _ := outputFile.GetCellValue(outputFile.GetSheetName(0), transfer.OverflowCell)
+							overflowCellData += fmt.Sprintf(", %s", fileCellValue)
+							outputFile.SetCellValue(outputFile.GetSheetName(0), transfer.OverflowCell, overflowCellData)
+							break
+						}
+					}
+				}
+			}
+		}
 
 		// save last client file if last row
 		if i == len(rows)-1 {
 			saveCurrentClientExcelFile(outputFile, rows, i)
-			fmt.Printf("saved file for %s\n", clientId)
 		}
 	}
 
@@ -152,9 +142,29 @@ func AggregateExcelDataComms() {
 	os.Exit(0)
 }
 
+func parseCell(cell string) (string, int) {
+	var letters string
+	var numbersStr string
+
+	for _, r := range cell {
+		if unicode.IsLetter(r) {
+			letters += string(r)
+		} else if unicode.IsDigit(r) {
+			numbersStr += string(r)
+		}
+	}
+	numbers, err := strconv.Atoi(numbersStr)
+	if err != nil {
+		logger.Error("Error converting cell number to int: %+v\n", "err", err)
+		log.Printf("Error converting cell number to int: %+v\n", err)
+		numbers = -1
+	}
+	return letters, numbers
+}
+
 func saveCurrentClientExcelFile(outputFile *excelize.File, rows [][]string, i int) {
 	clientId := rows[i][1]
-	clientName := rows[i][1]
+	clientName := rows[i][5]
 
 	outputFile.SetSheetName(outputFile.GetSheetName(0), clientName)
 
@@ -164,7 +174,6 @@ func saveCurrentClientExcelFile(outputFile *excelize.File, rows [][]string, i in
 		return
 	}
 	outputFile.Close()
-	fmt.Printf("saved %s\n", outputFile.Path)
 }
 
 func savePreviousClientExcelFile(outputFile *excelize.File, rows [][]string, i int) {
@@ -179,8 +188,6 @@ func savePreviousClientExcelFile(outputFile *excelize.File, rows [][]string, i i
 		return
 	}
 	outputFile.Close()
-	// TODO - remove test console print
-	fmt.Printf("saved file for %s\n", previousClientId)
 }
 
 func AggregateExcelDataPurchases() {

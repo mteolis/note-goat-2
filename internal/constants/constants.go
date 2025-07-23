@@ -11,7 +11,7 @@ var (
 		Transfers: []SrcToDst{
 			// Comms
 			{SrcCol: []string{"F"}, DstFromCell: "F4"},
-			{SrcCol: []string{"U"}, DstFromCell: "E4"},
+			{SrcCol: []string{"U"}, DstFromCell: "E6"},
 			{SrcCol: []string{"S"}, DstFromCell: "E10"},
 			{SrcCol: []string{"T"}, DstFromCell: "H10"},
 			{SrcCol: []string{"Y"}, DstFromCell: "D31"},
@@ -21,7 +21,7 @@ var (
 			// FX
 			{SrcCol: []string{"AC"}, DstFromCell: "D55"},
 			{SrcCol: []string{"E", "G"}, DstFromCell: "B58", DstToCell: "B69", OverflowCell: "D71"},
-			{SrcCol: []string{"AA", "AB"}, DstFromCell: "E58", DstToCell: "E69", OverflowCell: "D71"},
+			{SrcCol: []string{"AA"}, DstFromCell: "E58", DstToCell: "E69", OverflowCell: "D71"},
 		},
 	}
 	FxToTemplate = TransferMapping{
