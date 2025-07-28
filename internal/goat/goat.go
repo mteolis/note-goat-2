@@ -28,12 +28,13 @@ func InitGoat(slogger *slog.Logger, excelCommsPath string, excelPurchasesPath st
 	// excelCommsFile = excelCommsPath
 	// TODO - remove testing paths
 	excelCommsFile = "C:\\Users\\Michael\\git\\note-goat-2\\test\\email-attachments\\new\\Reviewed_Section 1 & 2 - Communications and FX.xlsx"
-	fmt.Printf("Excel Comms File: %s\n", excelCommsFile)
+	// fmt.Printf("Excel Comms File: %s\n", excelCommsFile)
 
-	excelPurchasesFile = excelPurchasesPath
+	// excelPurchasesFile = excelPurchasesPath
+	excelPurchasesFile = "C:\\Users\\Michael\\git\\note-goat-2\\test\\email-attachments\\new\\Section 3 - Note Purchases.xlsx"
 	// excelOutputFile = excelOutputPath
 	excelOutputFile = "C:\\Users\\Michael\\git\\note-goat-2\\test\\email-attachments\\original\\V1_Script_Template.xlsx"
-	fmt.Printf("Excel Output File: %s\n", excelOutputFile)
+	// fmt.Printf("Excel Output File: %s\n", excelOutputFile)
 	promptFile = promptPath
 	gemini.InitModel(logger, geminiApiKey)
 }
@@ -137,9 +138,6 @@ func AggregateExcelDataComms() {
 			saveCurrentClientExcelFile(outputFile, rows, i)
 		}
 	}
-
-	fmt.Printf("Exiting script - End of testing\n")
-	os.Exit(0)
 }
 
 func parseCell(cell string) (string, int) {
@@ -193,6 +191,122 @@ func savePreviousClientExcelFile(outputFile *excelize.File, rows [][]string, i i
 func AggregateExcelDataPurchases() {
 	logger.Debug("Aggregating Excel data from purchases file...")
 	log.Println("Aggregating Excel data from purchases file...")
+
+	file, err := excelize.OpenFile(excelPurchasesFile)
+	if err != nil {
+		logger.Error("Error opening purchases file: %+v\n", "err", err)
+		log.Printf("Error opening purchases file: %+v\n", err)
+		return
+	}
+
+	outputFile, err := excelize.OpenFile(excelOutputFile)
+	if err != nil {
+		logger.Error("Error opening output file: %+v\n", "err", err)
+		log.Printf("Error opening output file: %+v\n", err)
+		return
+	}
+	defer outputFile.Close()
+
+	for sheetIndex, sheetName := range file.GetSheetList() {
+		rows, err := file.GetRows(file.GetSheetName(sheetIndex))
+		for i := range rows {
+			if i < 15 {
+				continue // skip header rows
+			}
+			previousClientId, _ := file.GetCellValue(sheetName, fmt.Sprintf("B%d", i))
+			clientId, _ := file.GetCellValue(sheetName, fmt.Sprintf("B%d", i+1))
+			clientFileName := fmt.Sprintf("output/%s.xlsx", clientId)
+			if _, err := os.Stat(clientFileName); os.IsNotExist(err) {
+				logger.Warn("Warning: skipping opening output file %s for client with id %s: %+v\n", "fileName", clientFileName, "clientId", clientId, "err", err)
+				log.Printf("Warning: skipping opening output file %s for client with id %s: %+v\n", clientFileName, clientId, err)
+				continue // skip if file does not exist
+			}
+			if previousClientId != clientId {
+				date, _ := file.GetCellValue(sheetName, constants.PurchasesSection.Date.From)
+				outputFile.SetCellValue(outputFile.GetSheetName(0), constants.PurchasesSection.Date.To, date)
+				outputFile.Save()
+				outputFile.Close()
+
+				outputFile, err = excelize.OpenFile(clientFileName)
+				if err != nil {
+					logger.Warn("Warning: skipping opening output file %s for client with id %s: %+v\n", "fileName", clientFileName, "clientId", clientId, "err", err)
+					log.Printf("Warning: skipping opening output file %s for client with id %s: %+v\n", clientFileName, clientId, err)
+					continue // skip if file does not exist
+				}
+			}
+
+			colSIndex := colLetterToIndex("S")
+			colBPIndex := colLetterToIndex("BP")
+			for j := colSIndex; j <= colBPIndex; j++ {
+				amountPosition := fmt.Sprintf("%s%d", colIndexToLetter(j), i+1)
+				amountValue, _ := file.GetCellValue(sheetName, amountPosition)
+
+				if amountValue == "" {
+					continue
+				}
+
+				colToRange := strings.Split(constants.PurchasesSection.AccountNumber.Transfer.To, ":")
+				_, k := parseCell(colToRange[0])
+				_, colToNumber := parseCell(colToRange[1])
+				for ; k <= colToNumber; k++ {
+					accountTargetCell := fmt.Sprintf("%s%d", "B", k)
+					tickerTargetCell := fmt.Sprintf("%s%d", "E", k)
+					amountTargetCell := fmt.Sprintf("%s%d", "H", k)
+
+					accountTargetValue, _ := outputFile.GetCellValue(outputFile.GetSheetName(0), accountTargetCell)
+					tickerTargetValue, _ := outputFile.GetCellValue(outputFile.GetSheetName(0), tickerTargetCell)
+					amountTargetValue, _ := outputFile.GetCellValue(outputFile.GetSheetName(0), amountTargetCell)
+
+					accountNumberPosition := fmt.Sprintf("%s%d", "E", i+1)
+					accountTypePosition := fmt.Sprintf("%s%d", "G", i+1)
+					tickerPosition := fmt.Sprintf("%s%s", colIndexToLetter(j), "12")
+
+					accountNumberValue, _ := file.GetCellValue(sheetName, accountNumberPosition)
+					accountTypeValue, _ := file.GetCellValue(sheetName, accountTypePosition)
+					accountValue := fmt.Sprintf("%s %s", accountNumberValue, accountTypeValue)
+					tickerValue, _ := file.GetCellValue(sheetName, tickerPosition)
+
+					if accountTargetValue == "" && tickerTargetValue == "" && amountTargetValue == "" {
+						outputFile.SetCellValue(outputFile.GetSheetName(0), accountTargetCell, accountValue)
+						outputFile.SetCellValue(outputFile.GetSheetName(0), tickerTargetCell, tickerValue)
+						outputFile.SetCellValue(outputFile.GetSheetName(0), amountTargetCell, amountValue)
+						break
+					} else if k == colToNumber && accountTargetValue != "" && tickerTargetValue != "" && amountTargetValue != "" {
+						overflowValue, _ := outputFile.GetCellValue(outputFile.GetSheetName(0), constants.PurchasesSection.AccountNumber.Transfer.Overflow)
+						overflowValue += fmt.Sprintf("; %s %s %s", accountValue, tickerValue, amountValue)
+						outputFile.SetCellValue(outputFile.GetSheetName(0), constants.PurchasesSection.AccountNumber.Transfer.Overflow, overflowValue)
+						break
+					}
+				}
+			}
+			if i == len(rows)-1 {
+				date, _ := file.GetCellValue(sheetName, constants.PurchasesSection.Date.From)
+				outputFile.SetCellValue(outputFile.GetSheetName(0), constants.PurchasesSection.Date.To, date)
+				outputFile.Save()
+				outputFile.Close()
+			}
+		}
+	}
+}
+
+func colIndexToLetter(index int) string {
+	letters := ""
+	for index > 0 {
+		index--
+		letters = string(rune('A'+index%26)) + letters
+		index /= 26
+	}
+	return letters
+}
+
+func colLetterToIndex(col string) int {
+	col = strings.ToUpper(col)
+	result := 0
+	for i := 0; i < len(col); i++ {
+		result *= 26
+		result += int(col[i]-'A') + 1
+	}
+	return result
 }
 
 func AddAISummary() {

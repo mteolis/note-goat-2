@@ -51,7 +51,7 @@ func main() {
 
 	goat.InitGoat(logger, excelCommsPath, excelPurchasesPath, excelOutputPath, promptPath, geminiApiKey)
 	goat.AggregateExcelDataComms()
-	// goat.AggregateExcelDataPurchases()
+	goat.AggregateExcelDataPurchases()
 	// goat.AddAISummary()
 
 	utils.CalcExecutionTime(start)

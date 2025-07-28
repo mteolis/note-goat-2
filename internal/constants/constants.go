@@ -5,9 +5,7 @@ var (
 	Version         = "v2.0.0"
 	GeminiApiKeyVar = "GEMINI_API_KEY"
 
-	CommsClientNameColumn  = "F4"
-	CommsAdvisorNameColumn = "E6"
-	CommsFxToTemplate      = TransferMapping{
+	CommsFxToTemplate = TransferMapping{
 		Transfers: []SrcToDst{
 			// Comms
 			{SrcCol: []string{"F"}, DstFromCell: "F4"},
@@ -24,61 +22,40 @@ var (
 			{SrcCol: []string{"AA"}, DstFromCell: "E58", DstToCell: "E69", OverflowCell: "D71"},
 		},
 	}
-	FxToTemplate = TransferMapping{
-		Transfers: []SrcToDst{
-			{SrcCol: []string{"AC"}, DstFromCell: "D55"},
-			{SrcCol: []string{"E", "G"}, DstFromCell: "B58", DstToCell: "B69"},
-			{SrcCol: []string{"AA", "AB"}, DstFromCell: "E58", DstToCell: "E69"},
+	PurchasesSection = Purchases{
+		Date: Transfer{
+			From:     "A2",
+			To:       "D79",
+			Overflow: "",
 		},
-	}
-	PurchasesToTemplate = TransferMapping{
-		Transfers: []SrcToDst{
-			{SrcCol: []string{"F"}, DstFromCell: "F4"},
-			{SrcCol: []string{"E", "G"}, DstFromCell: "B82", DstToCell: "B93"},
-			{SrcCol: []string{"?", "?"}, DstFromCell: "B82", DstToCell: "B93"},
+		AccountNumber: AccountNumber{
+			Transfer: Transfer{
+				From:     "E",
+				To:       "B82:B93",
+				Overflow: "D95",
+			},
 		},
-	}
-	CommsToTemplateMapping = []map[string]string{
-		{"F": "F4"},
-		{"U": "E6"},
-		{"S": "E10"},
-		{"T": "H10"},
-		{"Y": "D31"},
-		{"E,G": "B34:B45"},
-		{"W": "E34:E45"},
-		{"X": "H34:H45"},
-		{"AC": "D55"},
-		{"E,G": "D55"},
-	}
-	ColumnMappings = map[string]int{
-		"A":  0,
-		"B":  1,
-		"C":  2,
-		"D":  3,
-		"E":  4,
-		"F":  5,
-		"G":  6,
-		"H":  7,
-		"I":  8,
-		"J":  9,
-		"K":  10,
-		"L":  11,
-		"M":  12,
-		"N":  13,
-		"O":  14,
-		"P":  15,
-		"Q":  16,
-		"R":  17,
-		"S":  18,
-		"T":  19,
-		"U":  20,
-		"V":  21,
-		"W":  22,
-		"X":  23,
-		"Y":  24,
-		"Z":  25,
-		"AA": 26,
-		"AB": 27,
+		AccountType: AccountType{
+			Transfer: Transfer{
+				From:     "G",
+				To:       "B82:B93",
+				Overflow: "D95",
+			},
+		},
+		Ticker: Ticker{
+			Transfer: Transfer{
+				From:     "S12:BP12",
+				To:       "E82:E93",
+				Overflow: "D95",
+			},
+		},
+		AmountPerTicker: AmountPerTicker{
+			Transfer: Transfer{
+				From:     "S:BP",
+				To:       "H82:H93",
+				Overflow: "D95",
+			},
+		},
 	}
 )
 
@@ -91,4 +68,34 @@ type SrcToDst struct {
 
 type TransferMapping struct {
 	Transfers []SrcToDst
+}
+
+type Purchases struct {
+	Date            Transfer
+	AccountNumber   AccountNumber
+	AccountType     AccountType
+	Ticker          Ticker
+	AmountPerTicker AmountPerTicker
+}
+
+type AmountPerTicker struct {
+	Transfer Transfer
+}
+
+type Ticker struct {
+	Transfer Transfer
+}
+
+type AccountType struct {
+	Transfer Transfer
+}
+
+type AccountNumber struct {
+	Transfer Transfer
+}
+
+type Transfer struct {
+	From     string
+	To       string
+	Overflow string
 }

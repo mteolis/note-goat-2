@@ -119,10 +119,6 @@ func MakeOutputDir() {
 	}
 }
 
-func ColumnToIndex(column string) int {
-	return constants.ColumnMappings[column]
-}
-
 func WaitForQuit() {
 	if err := keyboard.Open(); err != nil {
 		log.Fatalf("Error opening keyboard: %+v", err)
