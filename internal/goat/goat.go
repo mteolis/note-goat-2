@@ -25,17 +25,12 @@ var (
 
 func InitGoat(slogger *slog.Logger, excelCommsPath string, excelPurchasesPath string, excelOutputPath string, promptPath string, geminiApiKey string) {
 	logger = slogger
-	// excelCommsFile = excelCommsPath
-	// TODO - remove testing paths
-	excelCommsFile = "C:\\Users\\Michael\\git\\note-goat-2\\test\\email-attachments\\new\\Reviewed_Section 1 & 2 - Communications and FX.xlsx"
-	// fmt.Printf("Excel Comms File: %s\n", excelCommsFile)
 
-	// excelPurchasesFile = excelPurchasesPath
-	excelPurchasesFile = "C:\\Users\\Michael\\git\\note-goat-2\\test\\email-attachments\\new\\Section 3 - Note Purchases.xlsx"
-	// excelOutputFile = excelOutputPath
-	excelOutputFile = "C:\\Users\\Michael\\git\\note-goat-2\\test\\email-attachments\\original\\V1_Script_Template.xlsx"
-	// fmt.Printf("Excel Output File: %s\n", excelOutputFile)
+	excelCommsFile = excelCommsPath
+	excelPurchasesFile = excelPurchasesPath
+	excelOutputFile = excelOutputPath
 	promptFile = promptPath
+
 	gemini.InitModel(logger, geminiApiKey)
 }
 
@@ -138,6 +133,8 @@ func AggregateExcelDataComms() {
 			saveCurrentClientExcelFile(outputFile, rows, i)
 		}
 	}
+	logger.Debug("Aggregated Excel data from communications file successfully.")
+	log.Println("Aggregated Excel data from communications file successfully.")
 }
 
 func parseCell(cell string) (string, int) {
@@ -207,6 +204,7 @@ func AggregateExcelDataPurchases() {
 	}
 	defer outputFile.Close()
 
+	// assume sorted by client (col B)
 	for sheetIndex, sheetName := range file.GetSheetList() {
 		rows, err := file.GetRows(file.GetSheetName(sheetIndex))
 		for i := range rows {
@@ -218,7 +216,6 @@ func AggregateExcelDataPurchases() {
 			clientFileName := fmt.Sprintf("output/%s.xlsx", clientId)
 			if _, err := os.Stat(clientFileName); os.IsNotExist(err) {
 				logger.Warn("Warning: skipping opening output file %s for client with id %s: %+v\n", "fileName", clientFileName, "clientId", clientId, "err", err)
-				log.Printf("Warning: skipping opening output file %s for client with id %s: %+v\n", clientFileName, clientId, err)
 				continue // skip if file does not exist
 			}
 			if previousClientId != clientId {
@@ -230,7 +227,6 @@ func AggregateExcelDataPurchases() {
 				outputFile, err = excelize.OpenFile(clientFileName)
 				if err != nil {
 					logger.Warn("Warning: skipping opening output file %s for client with id %s: %+v\n", "fileName", clientFileName, "clientId", clientId, "err", err)
-					log.Printf("Warning: skipping opening output file %s for client with id %s: %+v\n", clientFileName, clientId, err)
 					continue // skip if file does not exist
 				}
 			}
@@ -287,6 +283,8 @@ func AggregateExcelDataPurchases() {
 			}
 		}
 	}
+	logger.Debug("Aggregated Excel data from purchases file successfully.")
+	log.Println("Aggregated Excel data from purchases file successfully.")
 }
 
 func colIndexToLetter(index int) string {
@@ -312,24 +310,71 @@ func colLetterToIndex(col string) int {
 func AddAISummary() {
 	logger.Debug("Adding AI summary...")
 	log.Println("Adding AI summary...")
-	prompt := utils.ReadFileTrimmed(promptFile)
-	response, err := gemini.Prompt(prompt)
+
+	promptPrefix := utils.ReadFileTrimmed(promptFile)
+	outputPath := "./output/"
+	entries, err := os.ReadDir(outputPath)
 	if err != nil {
-		logger.Error("Error prompting Gemini AI: %+v\n", "err", err)
-		log.Printf("Error prompting Gemini AI: %+v\n", err)
+		logger.Error("Error reading output directory: %+v\n", "err", err)
+		log.Printf("Error reading output directory: %+v\n", err)
 		return
 	}
 
-	answer := gemini.ExtractAnswer(response)
+	for i, entry := range entries {
+		progress(i, entry.Name(), len(entries))
+		if !entry.IsDir() {
+			filename := entry.Name()
+			filepath := outputPath + filename
 
-	saveStringToFile(answer)
+			contents, err := utils.ReadExcelFileContents(filepath)
+			if err != nil {
+				logger.Warn("Warning: skipping reading file %s with error: %+v\n", "fileName", filename, "err", err)
+				log.Printf("Warning: skipping reading file %s with error: %+v\n", filename, err)
+				continue
+			}
+
+			xl, err := excelize.OpenFile(filepath)
+			if err != nil {
+				logger.Warn("Warning: skipping reading file %s with error: %+v\n", "fileName", filename, "err", err)
+				log.Printf("Warning: skipping reading file %s with error: %+v\n", filename, err)
+				continue
+			}
+			defer xl.Close()
+
+			clientName, _ := xl.GetCellValue(xl.GetSheetName(0), constants.OutputClientNameCell)
+			advisorName, _ := xl.GetCellValue(xl.GetSheetName(0), constants.OutputAdvisorNameCell)
+
+			contents = strings.ReplaceAll(contents, clientName, constants.CLIENT_NAME)
+			contents = strings.ReplaceAll(contents, advisorName, constants.ADVISOR_NAME)
+
+			prompt := fmt.Sprintf("%s\n%s", promptPrefix, contents)
+			response, err := gemini.WaitForRateLimit(prompt)
+			if err != nil {
+				logger.Error("Error prompting Gemini AI: %+v\n", "err", err)
+				log.Printf("Error prompting Gemini AI: %+v\n", err)
+				return
+			}
+
+			answer := gemini.ExtractAnswer(response)
+
+			summary := strings.ReplaceAll(answer, constants.CLIENT_NAME, clientName)
+			summary = strings.ReplaceAll(summary, constants.ADVISOR_NAME, advisorName)
+
+			xl.SetCellValue(xl.GetSheetName(0), constants.OutputSummaryCell, summary)
+			xl.Save()
+			xl.Close()
+		}
+	}
+	logger.Debug("Added AI summary successfully.")
+	log.Println("Added AI summary successfully.")
 }
 
-// TODO: remove output test function
-func saveStringToFile(str string) {
-	err := os.WriteFile("test/output.txt", []byte(str), 0644)
-	if err != nil {
-		logger.Error("Error writing to file: %+v", "err", err)
-		log.Fatalf("Error writing to file: %+v", err)
+func progress(index int, cliendIdFile string, totalFiles int) {
+	percentage := (float64(index+1) / float64(totalFiles)) * 100
+	percentageStr := fmt.Sprintf("%.2f", percentage)
+	for len(percentageStr) < 6 {
+		percentageStr = " " + percentageStr
 	}
+	logger.Info("(%d/%d | %s%%) NoteGoating client id file: %s\n", "index", index+1, "totalFiles", totalFiles, "percentageStr", percentageStr, "clientIdFile", cliendIdFile)
+	log.Printf("(%d/%d | %s%%) NoteGoating client id file: %s\n", index+1, totalFiles, percentageStr, cliendIdFile)
 }

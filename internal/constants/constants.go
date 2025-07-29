@@ -5,7 +5,12 @@ var (
 	Version         = "v2.0.0"
 	GeminiApiKeyVar = "GEMINI_API_KEY"
 
-	CommsFxToTemplate = TransferMapping{
+	CLIENT_NAME           = "CLIENT_NAME"
+	ADVISOR_NAME          = "ADVISOR_NAME"
+	OutputClientNameCell  = "F4"
+	OutputAdvisorNameCell = "E6"
+	OutputSummaryCell     = "D12"
+	CommsFxToTemplate     = TransferMapping{
 		Transfers: []SrcToDst{
 			// Comms
 			{SrcCol: []string{"F"}, DstFromCell: "F4"},

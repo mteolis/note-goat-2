@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"log/slog"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
@@ -27,7 +29,7 @@ func InitModel(slogger *slog.Logger, geminiApiKey string) {
 		log.Fatalf("Error creating client: %+v", err)
 	}
 
-	model = client.GenerativeModel("gemini-2.0-flash")
+	model = client.GenerativeModel("gemini-2.5-flash-lite")
 }
 
 func Prompt(prompt string) (*genai.GenerateContentResponse, error) {
@@ -46,6 +48,20 @@ func Prompt(prompt string) (*genai.GenerateContentResponse, error) {
 	return resp, nil
 }
 
+func PromptQuietly(prompt string) (*genai.GenerateContentResponse, error) {
+	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
+	if err != nil {
+		return nil, err
+	}
+	if resp == nil {
+		logger.Error("Error: response is nil.")
+		log.Println("Error: response is nil.")
+		return nil, nil
+	}
+
+	return resp, nil
+}
+
 func IsRateLimitError(err error) bool {
 	// if err HTTP code is 429 (too many requests) then rate limit is reached
 	if apiErr, ok := err.(*apierror.APIError); ok {
@@ -55,23 +71,17 @@ func IsRateLimitError(err error) bool {
 }
 
 func WaitForRateLimit(prompt string) (*genai.GenerateContentResponse, error) {
-	sleep := 5
-	maxSleep := 60
-
 	for {
-		resp, err := Prompt(prompt)
+		resp, err := PromptQuietly(prompt)
 		if err != nil {
 			if IsRateLimitError(err) {
-				logger.Warn("Error prompting Gemini API: Rate limit reached - waiting %d seconds...\n", "sleep", sleep)
-				log.Printf("Error prompting Gemini API: Rate limit reached - waiting %d seconds...\n", sleep)
+				sleep := parseRetryAfter(err) + 1
+
+				logger.Warn("Warning prompting Gemini API: Rate limit reached - retry in %d seconds... Error: %+v\n", "sleep", sleep, "err", err)
+				log.Printf("Warning prompting Gemini API: Rate limit reached - retry in %d seconds...\n", sleep)
 
 				time.Sleep(time.Duration(sleep) * time.Second)
 
-				sleep *= 2
-
-				if sleep > maxSleep {
-					sleep = maxSleep
-				}
 				continue
 			}
 			return nil, err
@@ -79,6 +89,25 @@ func WaitForRateLimit(prompt string) (*genai.GenerateContentResponse, error) {
 
 		return resp, nil
 	}
+}
+
+func parseRetryAfter(err error) int {
+	errStr := err.Error()
+
+	re := regexp.MustCompile(`retry in (\d+)s`)
+	match := re.FindStringSubmatch(errStr)
+
+	if len(match) == 2 {
+		secondsStr := match[1]
+		seconds, err := strconv.Atoi(secondsStr)
+		if err != nil {
+			logger.Error("Error parsing retry after seconds: %+v\n", "err", err)
+			log.Printf("Error parsing retry after seconds: %+v\n", err)
+			return 0
+		}
+		return seconds
+	}
+	return 0
 }
 
 func ExtractAnswer(resp *genai.GenerateContentResponse) string {

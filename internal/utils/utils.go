@@ -11,6 +11,7 @@ import (
 	"github.com/eiannone/keyboard"
 	"github.com/mteolis/note-goat-2/internal/constants"
 	"github.com/sqweek/dialog"
+	"github.com/xuri/excelize/v2"
 )
 
 var (
@@ -117,6 +118,26 @@ func MakeOutputDir() {
 		log.Printf("Error creating output directory: %+v\n", err)
 		return
 	}
+}
+
+func ReadExcelFileContents(filePath string) (string, error) {
+	xl, err := excelize.OpenFile(filePath)
+	if err != nil {
+		logger.Error("Error reading file %s: %+v\n", "filePath", filePath, "err", err)
+		log.Printf("Error reading file %s: %+v\n", filePath, err)
+		return "", err
+	}
+
+	contents := ""
+	rows, err := xl.GetRows(xl.GetSheetName(0))
+	for _, row := range rows {
+		if len(row) == 0 {
+			continue // Skip empty rows
+		}
+		contents += strings.Join(row, " ") + "\n"
+	}
+
+	return contents, err
 }
 
 func WaitForQuit() {
