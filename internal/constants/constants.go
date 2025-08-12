@@ -2,7 +2,7 @@ package constants
 
 var (
 	AppName         = "NoteGoat"
-	Version         = "v2.0.0"
+	Version         = "v2.0.1"
 	GeminiApiKeyVar = "GEMINI_API_KEY"
 
 	CLIENT_NAME           = "CLIENT_NAME"

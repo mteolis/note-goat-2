@@ -1,4 +1,4 @@
-VERSION := v2.0.0
+VERSION := v2.0.1
 APP_NAME := NoteGoat
 BUILD_DIR := build
 
