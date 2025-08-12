@@ -2,6 +2,7 @@ package gemini
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"log/slog"
 	"regexp"
@@ -70,25 +71,36 @@ func IsRateLimitError(err error) bool {
 	return false
 }
 
-func WaitForRateLimit(prompt string) (*genai.GenerateContentResponse, error) {
-	for {
+func WaitForErrors(prompt string) (*genai.GenerateContentResponse, error) {
+	maxRetries := 17 // 2^N - 1 == 2^17 - 1 = 131071 seconds == 2184.52 minutes == 36.41 hours
+	backoff := 1
+
+	for i := range maxRetries {
 		resp, err := PromptQuietly(prompt)
 		if err != nil {
 			if IsRateLimitError(err) {
-				sleep := parseRetryAfter(err) + 1
+				retry := parseRetryAfter(err) + 1
 
-				logger.Warn("Warning prompting Gemini API: Rate limit reached - retry in %d seconds... Error: %+v\n", "sleep", sleep, "err", err)
-				log.Printf("Warning prompting Gemini API: Rate limit reached - retry in %d seconds...\n", sleep)
+				logger.Warn("Warning prompting Gemini API: Rate limit reached - retry in %d seconds... Error: %+v\n", "retry", retry, "err", err)
+				log.Printf("Warning prompting Gemini API: Rate limit reached - retry in %d seconds...\n", retry)
 
-				time.Sleep(time.Duration(sleep) * time.Second)
+				time.Sleep(time.Duration(retry) * time.Second)
+
+				continue
+			} else {
+				logger.Warn("Warning prompting Gemini API: retrying with exponential backoffs.", "attempt", i, "maxRetries", maxRetries, "backoff", backoff, "err", err)
+				log.Printf("Warning prompting Gemini API: retrying with exponential backoffs. attempt: %d; maxRetries: %d, backoff: %d, err: %+v\n", i, maxRetries, backoff, err)
+
+				time.Sleep(time.Duration(backoff) * time.Second)
+				backoff *= 2
 
 				continue
 			}
-			return nil, err
 		}
 
 		return resp, nil
 	}
+	return nil, fmt.Errorf("failed to get response after %d exponential retries.", maxRetries)
 }
 
 func parseRetryAfter(err error) int {
