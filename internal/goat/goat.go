@@ -348,7 +348,7 @@ func AddAISummary() {
 			contents = strings.ReplaceAll(contents, advisorName, constants.ADVISOR_NAME)
 
 			prompt := fmt.Sprintf("%s\n%s", promptPrefix, contents)
-			response, err := gemini.WaitForRateLimit(prompt)
+			response, err := gemini.WaitForErrors(prompt)
 			if err != nil {
 				logger.Error("Error prompting Gemini AI: %+v\n", "err", err)
 				log.Printf("Error prompting Gemini AI: %+v\n", err)
