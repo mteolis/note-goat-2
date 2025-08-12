@@ -95,12 +95,13 @@ func AggregateExcelDataComms() {
 						fileCellValue = "N/A"
 					}
 				}
-				if fileCellValue == "" {
-					continue // skip empty cells
-				}
 
 				if transfer.DstToCell == "" {
-					outputFile.SetCellValue(outputFile.GetSheetName(0), transfer.DstFromCell, fileCellValue)
+					if fileCellValue == "" {
+						outputFile.SetCellValue(outputFile.GetSheetName(0), transfer.DstFromCell, "N/A")
+					} else {
+						outputFile.SetCellValue(outputFile.GetSheetName(0), transfer.DstFromCell, fileCellValue)
+					}
 				} else {
 					dstFromLetter, dstFromNumber := parseCell(transfer.DstFromCell)
 					_, dstToNumber := parseCell(transfer.DstToCell)
@@ -110,14 +111,25 @@ func AggregateExcelDataComms() {
 							if len(strings.Split(outputCellValue, " ")) >= 2 {
 								continue
 							}
+							if fileCellValue == "" {
+								fileCellValue = "N/A"
+							}
 							outputCellValue += fmt.Sprintf(" %s", fileCellValue)
 							outputFile.SetCellValue(outputFile.GetSheetName(0), fmt.Sprintf("%s%d", dstFromLetter, row), outputCellValue)
 							break
 						}
 						if outputCellValue == "" {
-							outputFile.SetCellValue(outputFile.GetSheetName(0), fmt.Sprintf("%s%d", dstFromLetter, row), fileCellValue)
-							break
+							bColValue, _ := outputFile.GetCellValue(outputFile.GetSheetName(0), fmt.Sprintf("%s%d", "B", row))
+							if (srcCol == "W" || srcCol == "X") && fileCellValue == "" && bColValue != "" {
+								outputFile.SetCellValue(outputFile.GetSheetName(0), fmt.Sprintf("%s%d", dstFromLetter, row), "N/A")
+							} else {
+								outputFile.SetCellValue(outputFile.GetSheetName(0), fmt.Sprintf("%s%d", dstFromLetter, row), fileCellValue)
+								break
+							}
 						} else if row == dstToNumber {
+							if fileCellValue == "" {
+								fileCellValue = "N/A"
+							}
 							overflowCellData, _ := outputFile.GetCellValue(outputFile.GetSheetName(0), transfer.OverflowCell)
 							overflowCellData += fmt.Sprintf(", %s", fileCellValue)
 							outputFile.SetCellValue(outputFile.GetSheetName(0), transfer.OverflowCell, overflowCellData)
